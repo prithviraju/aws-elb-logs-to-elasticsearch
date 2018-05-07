@@ -84,7 +84,10 @@ function postDocumentToES(doc, context) {
     req.body = doc;
     req.headers['presigned-expires'] = false;
     req.headers['Host'] = endpoint.host;
-
+    // needed to make it work with ES 6.x
+    // https://www.elastic.co/blog/strict-content-type-checking-for-elasticsearch-rest-requests
+    req.headers['Content-Type'] = 'application/json';
+    
     // Sign the request (Sigv4)
     var signer = new AWS.Signers.V4(req, 'es');
     signer.addAuthorization(creds, new Date());
