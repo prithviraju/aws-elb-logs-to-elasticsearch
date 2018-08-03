@@ -17,7 +17,7 @@ and add them to an Amazon Elasticsearch Service domain.
 
 The zip file thus created is the Lambda Deployment Package.
 
-### AWS Configuration 
+### AWS Configuration
 
 Set up the Lambda function and the S3 bucket. You can reffer to for more details >
 [Lambda-S3 Walkthrough](http://docs.aws.amazon.com/lambda/latest/dg/walkthrough-s3-events-adminuser.html).
@@ -36,7 +36,7 @@ Please keep in mind the following notes and configuration overrides:
   2. S3 permits Lambda to fetch the created objects from a given bucket
   3. ES permits Lambda to add documents to the given domain
   4. Lambda handler is set to `index.handler`
-  5. Don't forget the ES domain parameters in index.js
+  5. Lambda environment variable es_endpoint to the elasticseach endpoint (dom't include https://)  
 
   The Lambda console provides a simple way to create an IAM role with policies
   for (1).  
@@ -45,7 +45,7 @@ Please keep in mind the following notes and configuration overrides:
   bucket.  
   For (3), add the following access policy to permit ES operations
   to the role.
-  
+
 ```
 {
       "Sid": "AllowLambdaAccess",
@@ -57,15 +57,22 @@ Please keep in mind the following notes and configuration overrides:
       "Resource": "arn:aws:es:eu-west-1:123456789012:domain/elastic-search-domain/*"
 }
 ```
-For (5)
+
+### Terraform Module
+
+for terraform module to deploy this lambda see  [neillturner/elb-logs-to-elasticsearch](https://registry.terraform.io/modules/neillturner/elb-logs-to-elasticsearch/aws)
 
 ```
-var esDomain = {
-    endpoint: 'elastic-search-domain-fs12fdwrdq2ahilw4zbrcocmmy.eu-west-1.es.amazonaws.com',
-    region: 'eu-west-1',
-    index: 'logstash-' + indexTimestamp,
-    doctype: 'elb-access-logs'
-};
+module "vpc_elb_logs_to_elasticsearch" {
+  source        = "neillturner/elb-logs-to-elasticsearch/aws"
+  version       = "0.1.0"
+
+  prefix        = "vpc_es_"
+  es_endpoint   = "vpc-gc-demo-vpc-gloo5rzcdhyiykwdlots2hdjla.eu-central-1.es.amazonaws.com"
+  s3_bucket_arn = "arn:aws:s3:::XXXXXXX-elb-logs-eu-west-1"
+  s3_bucket_id  = "XXXXXXX-elb-logs-eu-west-1"
+  subnet_ids    = ["subnet-d9990999"]
+}
 ```
 
 **Event source**
@@ -82,7 +89,7 @@ Add Event source for your lambda function
 `Suffix: .log`
 
 
-#License 
+#License
 ASL
 
 [https://aws.amazon.com/asl/](https://aws.amazon.com/asl/)

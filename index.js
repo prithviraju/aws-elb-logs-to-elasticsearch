@@ -22,15 +22,19 @@ var parse = require('elb-log-parser');  // elb-log-parser  https://github.com/to
 var path = require('path');
 var stream = require('stream');
 var indexTimestamp = new Date().toISOString().replace(/\-/g, '.').replace(/T.+/, '');
+const esEndpoint = process.env['es_endpoint'];
+var endpoint = '';
+if (!esEndpoint) {
+  console.log('ERROR: Environment variable es_endpoint not set');
+} else {
+  endpoint =  new AWS.Endpoint(esEndpoint);
+}
+const region = process.env['region'] || 'eu-west-1';
+const indexPrefix = process.env['index'] || 'elblogs';
+const index = indexPrefix + '-' + indexTimestamp; // adds a timestamp to index. Example: elblogs-2016.03.31
+const doctype = process.env['doctype'] || 'elb-access-logs';
 
 /* Globals */
-var esDomain = {
-    endpoint: 'elastic-search-domain-fs12fdwrdq2ahilw4zbrcocmmy.eu-west-1.es.amazonaws.com',
-    region: 'eu-west-1',
-    index: 'elblogs-' + indexTimestamp, // adds a timestamp to index. Example: elblogs-2016.03.31
-    doctype: 'elb-access-logs'
-};
-var endpoint =  new AWS.Endpoint(esDomain.endpoint);
 var s3 = new AWS.S3();
 var totLogLines = 0;    // Total number of log lines in the file
 var numDocsAdded = 0;   // Number of log lines added to ES so far
@@ -44,6 +48,8 @@ var numDocsAdded = 0;   // Number of log lines added to ES so far
  */
 var creds = new AWS.EnvironmentCredentials('AWS');
 
+console.log('Initializing AWS Lambda Function');
+
 /*
  * Get the log file from the given S3 bucket and key.  Parse it and add
  * each log record to the ES domain.
@@ -51,6 +57,10 @@ var creds = new AWS.EnvironmentCredentials('AWS');
 function s3LogsToES(bucket, key, context, lineStream, recordStream) {
     // Note: The Lambda function should be configured to filter for .log files
     // (as part of the Event Source "suffix" setting).
+    if (!esEndpoint) {
+      var error = new Error('ERROR: Environment variable es_endpoint not set')
+      context.fail(error);
+    }
 
     var s3Stream = s3.getObject({Bucket: bucket, Key: key}).createReadStream();
 
@@ -79,15 +89,15 @@ function postDocumentToES(doc, context) {
     var req = new AWS.HttpRequest(endpoint);
 
     req.method = 'POST';
-    req.path = path.join('/', esDomain.index, esDomain.doctype);
-    req.region = esDomain.region;
+    req.path = path.join('/', index, doctype);
+    req.region = region;
     req.body = doc;
     req.headers['presigned-expires'] = false;
     req.headers['Host'] = endpoint.host;
     // needed to make it work with ES 6.x
     // https://www.elastic.co/blog/strict-content-type-checking-for-elasticsearch-rest-requests
     req.headers['Content-Type'] = 'application/json';
-    
+
     // Sign the request (Sigv4)
     var signer = new AWS.Signers.V4(req, 'es');
     signer.addAuthorization(creds, new Date());
@@ -117,7 +127,7 @@ function postDocumentToES(doc, context) {
 /* Lambda "main": Execution starts here */
 exports.handler = function(event, context) {
     console.log('Received event: ', JSON.stringify(event, null, 2));
-    
+
     /* == Streams ==
     * To avoid loading an entire (typically large) log file into memory,
     * this is implemented as a pipeline of filters, streaming log data
